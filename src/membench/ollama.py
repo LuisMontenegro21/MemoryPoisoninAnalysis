@@ -43,7 +43,7 @@ class OllamaSettings:
             chat_model=os.getenv("OLLAMA_CHAT_MODEL", "qwen2.5:7b"),
             chat_model_digest=os.getenv("OLLAMA_CHAT_MODEL_DIGEST") or None,
             embedding_model=os.getenv(
-                "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"
+                "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text:137m-v1.5-fp16"
             ),
             embedding_model_digest=os.getenv("OLLAMA_EMBEDDING_MODEL_DIGEST")
             or None,

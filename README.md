@@ -48,14 +48,15 @@ same server and model.
 
 ```powershell
 ollama pull qwen2.5:7b
-ollama pull nomic-embed-text
+ollama pull nomic-embed-text:137m-v1.5-fp16
 uv run membench ollama status
 uv run membench ollama verify
 ```
 
 The initial local defaults are `qwen2.5:7b` for chat and
-`nomic-embed-text` at 768 dimensions for embeddings. Freeze the model digests
-reported by `membench ollama status` in resolved measured-run manifests.
+`nomic-embed-text:137m-v1.5-fp16` at 768 dimensions for embeddings. Freeze the
+model digests reported by `membench ollama status` in resolved measured-run
+manifests.
 
 Local credentials belong in `.env` (see `.env.example`). Runtime memory,
 database volumes, and emitted evidence belong below `artifacts/`; neither is
