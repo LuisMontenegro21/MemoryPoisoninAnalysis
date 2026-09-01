@@ -26,7 +26,10 @@ dev = [
     "ruff>=0.12,<1",
 ]
 telemem-runtime = ["telemem==1.10.0"]
-memanto-runtime = ["memanto==0.2.17"]
+memanto-runtime = [
+    "memanto==0.2.17",
+    "moorcheh-client==0.1.5",
+]
 langgraph-runtime = [
     "langgraph==1.2.11",
     "langgraph-checkpoint-postgres>=3.0,<4",

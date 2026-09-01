@@ -746,6 +746,7 @@ langgraph-runtime = [
 ]
 memanto-runtime = [
     { name = "memanto" },
+    { name = "moorcheh-client" },
 ]
 telemem-runtime = [
     { name = "telemem" },
@@ -770,8 +771,23 @@ langgraph-runtime = [
     { name = "langgraph-checkpoint-postgres", specifier = ">=3.0,<4" },
     { name = "psycopg", extras = ["binary", "pool"], specifier = ">=3.2,<4" },
 ]
-memanto-runtime = [{ name = "memanto", specifier = "==0.2.17" }]
+memanto-runtime = [
+    { name = "memanto", specifier = "==0.2.17" },
+    { name = "moorcheh-client", specifier = "==0.1.5" },
+]
 telemem-runtime = [{ name = "telemem", specifier = "==1.10.0" }]
+
+[[package]]
+name = "moorcheh-client"
+version = "0.1.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/f7/a9/51298d66df8b3912a8b593743c3401616f09f87d2a8fc6d5dbe52b05e860/moorcheh_client-0.1.5.tar.gz", hash = "sha256:5061ba32065e66ffa19375c51887465a644652eeb3814fd8872cb9c049083747", size = 50991, upload-time = "2026-07-20T18:25:43.429Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/65/41/11c6714f9fdcd56ce30943ca829c4b1502505ba2489e98f2514aa6e5d802/moorcheh_client-0.1.5-py3-none-any.whl", hash = "sha256:5cc315625f1630cb671f786d26adac8cc02b031cc90b637bc904d8b3813f2f44", size = 34161, upload-time = "2026-07-20T18:25:42.262Z" },
+]
 
 [[package]]
 name = "moorcheh-sdk"
