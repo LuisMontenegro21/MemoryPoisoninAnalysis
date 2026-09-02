@@ -58,6 +58,36 @@ The initial local defaults are `qwen2.5:7b` for chat and
 model digests reported by `membench ollama status` in resolved measured-run
 manifests.
 
+## TeleMem provider setup
+
+TeleMem uses isolated FAISS and history storage for every run. The default
+`TELEMEM_PROVIDER=ollama` configuration routes TeleMem through Ollama's
+OpenAI-compatible endpoint. Run its qualification from the TeleMem environment:
+
+```powershell
+.\.venvs\telemem\Scripts\membench.exe telemem status
+.\.venvs\telemem\Scripts\membench.exe telemem verify
+```
+
+The verification creates a unique directory below
+`artifacts/memory/telemem/`, confirms empty initial state, and exercises both
+`infer=False` direct writes and `infer=True` native-selective writes.
+
+To use real OpenAI models later, set the following in `.env`; the API key is
+read at runtime and must not be committed:
+
+```dotenv
+TELEMEM_PROVIDER=openai
+OPENAI_API_KEY=replace-locally
+TELEMEM_OPENAI_BASE_URL=https://api.openai.com/v1
+TELEMEM_OPENAI_CHAT_MODEL=gpt-5-mini
+TELEMEM_OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+TELEMEM_OPENAI_EMBEDDING_DIMENSIONS=1536
+```
+
+Changing the embedding provider, model, or dimension requires a fresh run ID
+and therefore a new vector store.
+
 Local credentials belong in `.env` (see `.env.example`). Runtime memory,
 database volumes, and emitted evidence belong below `artifacts/`; neither is
 committed.

@@ -3,6 +3,7 @@
 import importlib.metadata
 import platform
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import typer
@@ -10,12 +11,17 @@ from pydantic import ValidationError
 
 from membench.contract import SUPPORTED_POLICIES, Mechanism, load_manifest
 from membench.ollama import OllamaError, OllamaService, OllamaSettings
+from membench.telemem import TeleMemError, TeleMemSettings
+from membench.telemem import package_version as telemem_version
+from membench.telemem import qualify as qualify_telemem
 
 app = typer.Typer(help="Black-box memory-poisoning experiment harness.")
 manifest_app = typer.Typer(help="Inspect and validate experiment manifests.")
 ollama_app = typer.Typer(help="Inspect and qualify the shared Ollama endpoint.")
+telemem_app = typer.Typer(help="Inspect and qualify the isolated TeleMem runtime.")
 app.add_typer(manifest_app, name="manifest")
 app.add_typer(ollama_app, name="ollama")
+app.add_typer(telemem_app, name="telemem")
 
 
 @app.command()
@@ -115,4 +121,64 @@ def ollama_verify() -> None:
     typer.echo(
         f"Embedding model ready: {settings.embedding_model} "
         f"({len(vector)} dimensions)"
+    )
+
+
+@telemem_app.command("status")
+def telemem_status() -> None:
+    """Show the resolved TeleMem provider without importing vendor runtime state."""
+    try:
+        settings = TeleMemSettings.from_env()
+        version = telemem_version()
+    except (TeleMemError, ValueError) as exc:
+        typer.echo(f"TeleMem check failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(f"TeleMem version: {version}")
+    typer.echo(f"Provider: {settings.provider}")
+    typer.echo(f"Endpoint: {settings.base_url}")
+    typer.echo(f"Chat model: {settings.llm_model}")
+    typer.echo(
+        f"Embedding model: {settings.embedding_model} "
+        f"({settings.embedding_dimensions} dimensions)"
+    )
+    typer.echo(f"Storage root: {settings.storage_root}")
+    if settings.provider == "openai":
+        configured = "yes" if settings.credential_configured else "no"
+        typer.echo(f"OpenAI credential configured: {configured}")
+
+
+@telemem_app.command("verify")
+def telemem_verify(
+    run_id: str = typer.Option(
+        "",
+        help=(
+            "Unique run identifier; an isolated qualification ID is generated "
+            "by default."
+        ),
+    ),
+) -> None:
+    """Run isolated direct and native-selective TeleMem write/search probes."""
+    if not run_id:
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        run_id = f"qualification-{timestamp}"
+    try:
+        settings = TeleMemSettings.from_env()
+        result = qualify_telemem(settings, run_id)
+    except (TeleMemError, ValueError, OSError) as exc:
+        typer.echo(f"TeleMem qualification failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(f"TeleMem qualification passed: {result.run_id}")
+    typer.echo(f"Provider: {settings.provider}")
+    typer.echo(f"Storage: {result.storage_path}")
+    typer.echo(
+        "Direct path: "
+        f"{result.direct_write_count} write(s), "
+        f"{result.direct_search_count} search result(s)"
+    )
+    typer.echo(
+        "Native-selective path: "
+        f"{result.native_write_count} write(s), "
+        f"{result.native_search_count} search result(s)"
     )
