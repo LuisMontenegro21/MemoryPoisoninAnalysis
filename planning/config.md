@@ -159,6 +159,17 @@ For pilot and final runs, use `PostgresStore` with:
 - A configured embedding provider and matching dimensions when semantic search
   is enabled.
 
+The initial Windows/Linux-AMD64 development service is pinned to pgvector 0.8.6
+on PostgreSQL 16/bookworm using this immutable platform manifest:
+
+```text
+pgvector/pgvector@sha256:eac621400b7b7ff52493883e41e930e3d104695fea5b68cc0c42370cf7880067
+```
+
+The moving `latest` and `pg16` tags are not used. Service configuration lives in
+`../infra/langgraph/compose.yaml`; credentials are derived from the ignored
+`LANGGRAPH_POSTGRES_DSN` only at process launch.
+
 LangGraph does not decide what becomes memory. The selected write policy must
 explicitly call `put()` or `aput()`.
 

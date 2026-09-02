@@ -10,6 +10,15 @@ import typer
 from pydantic import ValidationError
 
 from membench.contract import SUPPORTED_POLICIES, Mechanism, load_manifest
+from membench.langgraph_store import (
+    LangGraphStoreError,
+    LangGraphStoreSettings,
+    database_status,
+    qualify_in_memory,
+    qualify_store,
+    run_postgres_service,
+)
+from membench.langgraph_store import package_versions as langgraph_versions
 from membench.ollama import OllamaError, OllamaService, OllamaSettings
 from membench.telemem import TeleMemError, TeleMemSettings
 from membench.telemem import package_version as telemem_version
@@ -19,9 +28,13 @@ app = typer.Typer(help="Black-box memory-poisoning experiment harness.")
 manifest_app = typer.Typer(help="Inspect and validate experiment manifests.")
 ollama_app = typer.Typer(help="Inspect and qualify the shared Ollama endpoint.")
 telemem_app = typer.Typer(help="Inspect and qualify the isolated TeleMem runtime.")
+langgraph_app = typer.Typer(
+    help="Manage and qualify the persistent LangGraph store."
+)
 app.add_typer(manifest_app, name="manifest")
 app.add_typer(ollama_app, name="ollama")
 app.add_typer(telemem_app, name="telemem")
+app.add_typer(langgraph_app, name="langgraph")
 
 
 @app.command()
@@ -182,3 +195,101 @@ def telemem_verify(
         f"{result.native_write_count} write(s), "
         f"{result.native_search_count} search result(s)"
     )
+
+
+@langgraph_app.command("up")
+def langgraph_up() -> None:
+    """Start the pinned PostgreSQL/pgvector service and wait for health."""
+    try:
+        settings = LangGraphStoreSettings.from_env()
+        output = run_postgres_service(settings, "up")
+    except (LangGraphStoreError, ValueError) as exc:
+        typer.echo(f"LangGraph PostgreSQL start failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    if output:
+        typer.echo(output)
+    typer.echo(f"LangGraph PostgreSQL is ready: {settings.redacted_dsn}")
+
+
+@langgraph_app.command("stop")
+def langgraph_stop() -> None:
+    """Stop PostgreSQL without deleting its persistent volume."""
+    try:
+        settings = LangGraphStoreSettings.from_env()
+        output = run_postgres_service(settings, "stop")
+    except (LangGraphStoreError, ValueError) as exc:
+        typer.echo(f"LangGraph PostgreSQL stop failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    if output:
+        typer.echo(output)
+    typer.echo("LangGraph PostgreSQL stopped; its volume was retained.")
+
+
+@langgraph_app.command("status")
+def langgraph_status() -> None:
+    """Show package, database, and embedding status without exposing credentials."""
+    try:
+        settings = LangGraphStoreSettings.from_env()
+        versions = langgraph_versions()
+        server_version, vector_version = database_status(settings)
+    except (LangGraphStoreError, ValueError) as exc:
+        typer.echo(f"LangGraph store check failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    for package, version in versions.items():
+        typer.echo(f"{package}: {version}")
+    typer.echo(f"PostgreSQL: {server_version}")
+    typer.echo(f"pgvector: {vector_version or 'not installed'}")
+    typer.echo(f"Database: {settings.redacted_dsn}")
+    typer.echo(f"Embedding endpoint: {settings.embedding_base_url}")
+    typer.echo(
+        f"Embedding model: {settings.embedding_model} "
+        f"({settings.embedding_dimensions} dimensions)"
+    )
+
+
+@langgraph_app.command("verify")
+def langgraph_verify(
+    run_id: str = typer.Option(
+        "",
+        help=(
+            "Unique run identifier; an isolated qualification ID is generated "
+            "by default."
+        ),
+    ),
+) -> None:
+    """Run persistent write, read, semantic search, and isolation probes."""
+    if not run_id:
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        run_id = f"qualification-{timestamp}"
+    try:
+        settings = LangGraphStoreSettings.from_env()
+        result = qualify_store(settings, run_id)
+    except (LangGraphStoreError, ValueError) as exc:
+        typer.echo(f"LangGraph store qualification failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(f"LangGraph store qualification passed: {result.run_id}")
+    typer.echo(f"Namespace: {'/'.join(result.namespace)}")
+    typer.echo(f"Exact read: {result.exact_read}")
+    typer.echo(f"Semantic results: {result.semantic_results}")
+    typer.echo(f"Isolated namespace empty: {result.isolated_namespace_empty}")
+
+
+@langgraph_app.command("smoke")
+def langgraph_smoke(
+    run_id: str = typer.Option("smoke", help="Namespace identifier for the smoke run."),
+) -> None:
+    """Verify LangGraph and Ollama using a non-persistent in-memory store."""
+    try:
+        settings = LangGraphStoreSettings.from_env()
+        result = qualify_in_memory(settings, run_id)
+    except (LangGraphStoreError, ValueError) as exc:
+        typer.echo(f"LangGraph in-memory smoke test failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo("LangGraph in-memory smoke test passed (non-persistent).")
+    typer.echo(f"Namespace: {'/'.join(result.namespace)}")
+    typer.echo(f"Exact read: {result.exact_read}")
+    typer.echo(f"Semantic results: {result.semantic_results}")
+    typer.echo(f"Isolated namespace empty: {result.isolated_namespace_empty}")

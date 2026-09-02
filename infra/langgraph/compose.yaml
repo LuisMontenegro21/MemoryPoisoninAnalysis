@@ -1,0 +1,28 @@
+services:
+  postgres:
+    # pgvector 0.8.6 on PostgreSQL 16/bookworm, pinned for linux/amd64.
+    image: ${LANGGRAPH_POSTGRES_IMAGE}
+    container_name: ${LANGGRAPH_POSTGRES_CONTAINER}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LANGGRAPH_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LANGGRAPH_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${LANGGRAPH_POSTGRES_DB}
+    ports:
+      - "127.0.0.1:${LANGGRAPH_POSTGRES_PORT}:5432"
+    volumes:
+      - langgraph-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    labels:
+      org.membench.component: langgraph-postgres
+
+volumes:
+  langgraph-postgres-data:
+    name: membench-langgraph-postgres-data

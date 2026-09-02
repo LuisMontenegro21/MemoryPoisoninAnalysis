@@ -88,6 +88,36 @@ TELEMEM_OPENAI_EMBEDDING_DIMENSIONS=1536
 Changing the embedding provider, model, or dimension requires a fresh run ID
 and therefore a new vector store.
 
+## LangGraph persistent store
+
+LangGraph uses PostgreSQL 16 with pgvector 0.8.6. The Compose service references
+the immutable Linux/AMD64 image digest, binds port 5432 only to localhost, and
+derives its credentials from the ignored `LANGGRAPH_POSTGRES_DSN` without
+printing them.
+
+```powershell
+.\.venvs\langgraph\Scripts\membench.exe langgraph up
+.\.venvs\langgraph\Scripts\membench.exe langgraph status
+.\.venvs\langgraph\Scripts\membench.exe langgraph verify
+```
+
+The qualification runs `PostgresStore.setup()`, writes one memory into a unique
+namespace, verifies exact and semantic retrieval using the shared Ollama
+embedding model, and confirms that a sibling namespace remains empty.
+
+If Docker Hub is temporarily unavailable, validate the LangGraph/Ollama path
+without persistence:
+
+```powershell
+.\.venvs\langgraph\Scripts\membench.exe langgraph smoke
+```
+
+Stop the service without deleting its persistent volume:
+
+```powershell
+.\.venvs\langgraph\Scripts\membench.exe langgraph stop
+```
+
 Local credentials belong in `.env` (see `.env.example`). Runtime memory,
 database volumes, and emitted evidence belong below `artifacts/`; neither is
 committed.
