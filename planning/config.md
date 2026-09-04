@@ -3,8 +3,9 @@
 ## Purpose
 
 This document defines the recommended local runtime layout for TeleMem, Memanto,
-and LangGraph. It isolates Python environments and persisted memory while keeping
-the mechanisms easy to debug locally.
+LangGraph, and the optional LangMem selective writer. It isolates Python
+environments and persisted memory while keeping the mechanisms easy to debug
+locally.
 
 The preferred setup is hybrid:
 
@@ -24,10 +25,11 @@ Host
 |   |-- telemem/
 |   |-- memanto/
 |   `-- langgraph/
-|-- artifacts/memory/<run_id>/
+|-- artifacts/memory/
 |   |-- telemem/
 |   |-- memanto/
-|   `-- langgraph/
+|   |-- langgraph/
+|   `-- langmem/<run_id>/store.sqlite
 |-- Moorcheh container        # Memanto storage and retrieval
 |-- PostgreSQL container      # LangGraph persistent Store
 `-- Ollama                    # Optional shared local model endpoint
@@ -39,44 +41,52 @@ runtime is implemented.
 
 ## Version management
 
-The repository currently requires Python 3.12 or newer and locks these versions:
+The repository requires Python 3.12.x and locks these versions:
 
 | Package | Locked version |
 | --- | ---: |
 | TeleMem | 1.10.0 |
 | Memanto | 0.2.17 |
 | LangGraph | 1.2.11 |
+| LangMem | 0.0.30 |
+| LangChain Ollama | 1.1.0 |
+| LangChain OpenAI | 1.6.0 |
+| LangGraph SQLite checkpoint/store | 3.1.1 |
 
 Every environment must be created from the repository's `pyproject.toml` and
 `uv.lock`:
 
 ```powershell
-$env:UV_PROJECT_ENVIRONMENT = ".venvs\telemem"
-uv sync --locked
+$env:UV_PROJECT_ENVIRONMENT = ".venvs\langgraph"
+uv sync --locked --no-default-groups --group langgraph-runtime
+Remove-Item Env:UV_PROJECT_ENVIRONMENT
 ```
 
-Repeat with `.venvs\memanto` and `.venvs\langgraph`. Clear or replace
-`UV_PROJECT_ENVIRONMENT` before operating on another environment.
+Use the corresponding dependency group and environment path for TeleMem or
+Memanto. Clear or replace `UV_PROJECT_ENVIRONMENT` before operating on another
+environment.
 
-At present, all three packages are base dependencies, so each environment will
-contain nearly the same package set. To make the environments mechanism-specific,
-move runtime dependencies into uv dependency groups while retaining common project
-dependencies in the base group:
+Runtime dependencies are separated into uv dependency groups. The current
+LangGraph environment includes the storage layer, LangMem writer, and both model
+provider adapters using exact direct-dependency versions:
 
 ```toml
 [dependency-groups]
-telemem-runtime = ["telemem>=1.10,<1.11"]
-memanto-runtime = ["memanto>=0.2.17"]
+telemem-runtime = ["telemem==1.10.0"]
+memanto-runtime = ["memanto==0.2.17", "moorcheh-client==0.1.5"]
 langgraph-runtime = [
-    "langgraph>=1.2.11",
-    "langgraph-checkpoint-postgres",
-    "psycopg[binary,pool]",
+    "langgraph==1.2.11",
+    "langchain-ollama==1.1.0",
+    "langchain-openai==1.6.0",
+    "langgraph-checkpoint-postgres==3.1.2",
+    "langgraph-checkpoint-sqlite==3.1.1",
+    "langmem==0.0.30",
 ]
 ```
 
-Adding the PostgreSQL packages requires regenerating `uv.lock` once. Review that
-change and confirm that the existing TeleMem, Memanto, and LangGraph versions did
-not move. Do not install untracked packages directly inside an environment.
+Regenerate `uv.lock` only after an intentional dependency edit, then review the
+resolved version changes before syncing. Do not install untracked packages
+directly inside an environment.
 
 ## Storage isolation contract
 
@@ -89,6 +99,7 @@ explicitly requested.
 | TeleMem | Unique local directory, vector-store path, and collection |
 | Memanto | Unique agent and namespace; dedicated backend for parallel trials |
 | LangGraph | Unique namespace and PostgreSQL schema or database |
+| LangMem | Unique run and memory-type namespace; run-specific SQLite file by default |
 
 Virtual environments alone do not isolate user-profile files, ports, services,
 environment variables, or databases.
@@ -172,6 +183,31 @@ The moving `latest` and `pg16` tags are not used. Service configuration lives in
 
 LangGraph does not decide what becomes memory. The selected write policy must
 explicitly call `put()` or `aput()`.
+
+### LangMem writer over LangGraph
+
+LangMem is available as `langmem_store_manager_v1`, pinned to 0.0.30. It adds a
+selective extraction/update writer while retaining LangGraph as the storage
+contract. The local development default is `SqliteStore`, with one database at
+`artifacts/memory/langmem/<run_id>/store.sqlite`; `InMemoryStore` is used only by
+the smoke command. Set `LANGMEM_STORAGE_BACKEND=postgres` to reuse the configured
+`LANGGRAPH_POSTGRES_DSN` for a pilot or final condition.
+
+Memory families are independent, comma-separated configuration values:
+
+- `semantic`: durable facts, preferences, relationships, goals, or decisions;
+- `episodic`: specific events and outcomes;
+- `procedural`: reusable rules stored as inert records.
+
+The default is `LANGMEM_MEMORY_TYPES=semantic`. Every family receives its own
+namespace below `membench/langmem/<run_id>/`. Enabling procedural storage does
+not enable LangMem's prompt optimizer; runtime prompt optimization remains out
+of scope.
+
+The writer and embedding roles can each use `ollama` or `openai`. The default is
+fully local Ollama for both roles. Any OpenAI role requires `OPENAI_API_KEY`, and
+the status output reports only whether a credential is present. SQLite remains
+local even when inference or embedding is remote.
 
 ## Model-provider configuration
 

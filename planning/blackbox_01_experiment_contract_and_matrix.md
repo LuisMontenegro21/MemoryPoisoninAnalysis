@@ -124,15 +124,18 @@ requires reconstruction of the complete benign and attacked memory states.
 | --- | --- | --- | --- |
 | TeleMem | `add(..., infer=False)` or equivalent verbatim path | Common external guard, then direct write | `add(..., infer=True)` |
 | Memanto | Direct typed `remember` | Common external guard, then direct `remember` | Native conversation extraction/policy |
-| LangGraph | Direct `Store.put()` | Common external guard, then `Store.put()` | Not available unless a separately versioned application-native writer exists |
+| LangGraph | Direct `Store.put()` | Common external guard, then `Store.put()` | `langmem_store_manager_v1` (LangMem 0.0.30), only when explicitly declared |
 
 The common guarded policy is the primary cross-mechanism policy comparison
 because it can implement the same admission contract for all mechanisms.
 Mechanism-native policies are a secondary ecological comparison and must not be
 presented as identical implementations.
 
-Do not silently replace LangGraph's missing native writer with the common writer.
-Mark the native cell unsupported.
+LangGraph itself still has no native writer. The selective cell is supported only
+when the manifest names `langmem_store_manager_v1`, pins writer version 0.0.30,
+lists the enabled memory families, and keeps procedural prompt optimization off.
+Report this condition as "LangGraph Store + LangMem writer," not "LangGraph
+native."
 
 ## 6. Trial family
 
@@ -251,4 +254,3 @@ This phase is complete when:
 - all configuration fields required to reproduce a trial are identified;
 - the 15-attack battery and paired trial design are fixed as requirements;
 - no old planning file has to be interpreted to run this reduced track.
-

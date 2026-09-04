@@ -27,10 +27,12 @@ class WritePolicy(StrEnum):
 SUPPORTED_POLICIES: dict[Mechanism, frozenset[WritePolicy]] = {
     Mechanism.TELEMEM: frozenset(WritePolicy),
     Mechanism.MEMANTO: frozenset(WritePolicy),
-    Mechanism.LANGGRAPH: frozenset(
-        {WritePolicy.DIRECT, WritePolicy.SHARED_GUARDED}
-    ),
+    Mechanism.LANGGRAPH: frozenset(WritePolicy),
 }
+
+LANGMEM_WRITER_IMPLEMENTATION = "langmem_store_manager_v1"
+LANGMEM_WRITER_VERSION = "0.0.30"
+LANGMEM_MEMORY_TYPES = frozenset({"semantic", "episodic", "procedural"})
 
 
 class DatasetConfig(StrictModel):
@@ -52,6 +54,41 @@ class ConditionConfig(StrictModel):
                 f"{self.mechanism.value} does not support "
                 f"{self.write_policy.value}"
             )
+        if (
+            self.mechanism == Mechanism.LANGGRAPH
+            and self.write_policy == WritePolicy.NATIVE_SELECTIVE
+        ):
+            implementation = self.mechanism_options.get("writer_implementation")
+            version = self.mechanism_options.get("writer_version")
+            if implementation != LANGMEM_WRITER_IMPLEMENTATION:
+                raise ValueError(
+                    "LangGraph native_selective requires the explicitly versioned "
+                    f"writer_implementation={LANGMEM_WRITER_IMPLEMENTATION!r}"
+                )
+            if version != LANGMEM_WRITER_VERSION:
+                raise ValueError(
+                    "LangGraph native_selective requires "
+                    f"writer_version={LANGMEM_WRITER_VERSION!r}"
+                )
+            memory_types = self.mechanism_options.get("memory_types")
+            if (
+                not isinstance(memory_types, list)
+                or not memory_types
+                or any(
+                    not isinstance(item, str) or item not in LANGMEM_MEMORY_TYPES
+                    for item in memory_types
+                )
+                or len(set(memory_types)) != len(memory_types)
+            ):
+                allowed = ", ".join(sorted(LANGMEM_MEMORY_TYPES))
+                raise ValueError(
+                    "LangMem memory_types must be a non-empty unique list containing "
+                    f"only: {allowed}"
+                )
+            if self.mechanism_options.get("procedural_prompt_optimization", False):
+                raise ValueError(
+                    "procedural prompt optimization is outside this experiment track"
+                )
         return self
 
 

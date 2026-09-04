@@ -1,0 +1,43 @@
+schema_version: 1
+experiment_track: blackbox_memory_poisoning
+
+dataset:
+  name: personamem_v2
+  revision: replace-with-immutable-revision
+  subset: blackbox_battery_v1
+
+condition:
+  mechanism: langgraph
+  mechanism_version: 1.2.11
+  write_policy: native_selective
+  mechanism_options:
+    writer_implementation: langmem_store_manager_v1
+    writer_version: 0.0.30
+    memory_types: [semantic]
+    procedural_prompt_optimization: false
+
+models:
+  writer: {provider: ollama, model: "qwen2.5:7b@replace-with-local-digest"}
+  responder: {provider: ollama, model: "qwen2.5:7b@replace-with-local-digest"}
+  embedding:
+    provider: ollama
+    model: "nomic-embed-text:137m-v1.5-fp16@replace-with-local-digest"
+
+retrieval:
+  top_k: 5
+  threshold: null
+  context_token_budget: 2048
+
+attack:
+  knowledge: black_box
+  delivery: conversation
+  battery: pmv2_blackbox_battery_v1
+  attack_id: bb-pi-001
+
+isolation:
+  run_id: langmem-example-do-not-execute
+  config_ref: planning/config.md
+
+replication:
+  seed: 20260831
+  response_replicates: 1

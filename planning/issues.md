@@ -37,6 +37,10 @@ failed with the same `EOF` condition.
   volume was created.
 - LangGraph's non-persistent `InMemoryStore` qualification with Ollama passes,
   but PostgreSQL persistence has not yet been qualified.
+- LangMem now has a separately qualified persistent SQLite path at
+  `artifacts/memory/langmem/<run_id>/store.sqlite`. This removes Docker from
+  local LangMem development, but it does not qualify or replace the planned
+  PostgreSQL pilot/final backend.
 
 ## Current handling
 

@@ -19,6 +19,9 @@ from membench.langgraph_store import (
     run_postgres_service,
 )
 from membench.langgraph_store import package_versions as langgraph_versions
+from membench.langmem import LangMemError, LangMemSettings
+from membench.langmem import package_versions as langmem_versions
+from membench.langmem import qualify as qualify_langmem
 from membench.ollama import OllamaError, OllamaService, OllamaSettings
 from membench.telemem import TeleMemError, TeleMemSettings
 from membench.telemem import package_version as telemem_version
@@ -31,10 +34,14 @@ telemem_app = typer.Typer(help="Inspect and qualify the isolated TeleMem runtime
 langgraph_app = typer.Typer(
     help="Manage and qualify the persistent LangGraph store."
 )
+langmem_app = typer.Typer(
+    help="Inspect and qualify LangMem selective writing over LangGraph stores."
+)
 app.add_typer(manifest_app, name="manifest")
 app.add_typer(ollama_app, name="ollama")
 app.add_typer(telemem_app, name="telemem")
 app.add_typer(langgraph_app, name="langgraph")
+app.add_typer(langmem_app, name="langmem")
 
 
 @app.command()
@@ -56,6 +63,8 @@ def show_matrix() -> None:
     """Print supported mechanism/write-policy combinations."""
     for mechanism in Mechanism:
         policies = ", ".join(sorted(p.value for p in SUPPORTED_POLICIES[mechanism]))
+        if mechanism == Mechanism.LANGGRAPH:
+            policies += " (native_selective requires langmem_store_manager_v1)"
         typer.echo(f"{mechanism.value}: {policies}")
 
 
@@ -293,3 +302,94 @@ def langgraph_smoke(
     typer.echo(f"Exact read: {result.exact_read}")
     typer.echo(f"Semantic results: {result.semantic_results}")
     typer.echo(f"Isolated namespace empty: {result.isolated_namespace_empty}")
+
+
+@langmem_app.command("status")
+def langmem_status() -> None:
+    """Show the resolved LangMem writer, schemas, and storage backend."""
+    try:
+        settings = LangMemSettings.from_env()
+        versions = langmem_versions()
+    except (LangMemError, ValueError) as exc:
+        typer.echo(f"LangMem check failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    for package, version in versions.items():
+        typer.echo(f"{package}: {version}")
+    typer.echo(
+        f"Writer: {settings.writer_provider}/{settings.writer_model}"
+    )
+    typer.echo(
+        "Embedding: "
+        f"{settings.embedding_provider}/{settings.embedding_model} "
+        f"({settings.embedding_dimensions} dimensions)"
+    )
+    typer.echo(
+        "Memory types: "
+        + ", ".join(memory_type.value for memory_type in settings.memory_types)
+    )
+    typer.echo(f"Storage backend: {settings.storage_backend}")
+    if settings.storage_backend == "sqlite":
+        typer.echo(f"SQLite root: {settings.sqlite_root}")
+    if "openai" in {settings.writer_provider, settings.embedding_provider}:
+        configured = "yes" if settings.credential_configured else "no"
+        typer.echo(f"OpenAI credential configured: {configured}")
+    typer.echo("Procedural prompt optimization: disabled")
+
+
+def _run_langmem_qualification(settings: LangMemSettings, run_id: str) -> None:
+    try:
+        result = qualify_langmem(settings, run_id)
+    except (LangMemError, ValueError, OSError) as exc:
+        typer.echo(f"LangMem qualification failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+
+    typer.echo(f"LangMem qualification passed: {result.run_id}")
+    typer.echo(f"Storage backend: {result.storage_backend}")
+    if result.storage_path is not None:
+        typer.echo(f"Storage: {result.storage_path}")
+    for memory_type, count in result.write_counts.items():
+        typer.echo(
+            f"{memory_type}: {count} write(s), "
+            f"{result.retrieval_counts[memory_type]} retrieval result(s)"
+        )
+    typer.echo(
+        f"Isolated namespaces empty: {result.isolated_namespaces_empty}"
+    )
+
+
+@langmem_app.command("verify")
+def langmem_verify(
+    run_id: str = typer.Option(
+        "",
+        help=(
+            "Unique run identifier; an isolated qualification ID is generated "
+            "by default."
+        ),
+    ),
+) -> None:
+    """Qualify LangMem with the configured persistent LangGraph store."""
+    if not run_id:
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        run_id = f"qualification-{timestamp}"
+    try:
+        settings = LangMemSettings.from_env()
+    except (LangMemError, ValueError) as exc:
+        typer.echo(f"LangMem configuration failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    _run_langmem_qualification(settings, run_id)
+
+
+@langmem_app.command("smoke")
+def langmem_smoke(
+    run_id: str = typer.Option(
+        "smoke", help="Namespace identifier for the non-persistent smoke run."
+    ),
+) -> None:
+    """Qualify the writer with an in-memory LangGraph Store."""
+    try:
+        settings = LangMemSettings.from_env().with_storage_backend("memory")
+    except (LangMemError, ValueError) as exc:
+        typer.echo(f"LangMem configuration failed: {exc}", err=True)
+        raise typer.Exit(1) from exc
+    _run_langmem_qualification(settings, run_id)

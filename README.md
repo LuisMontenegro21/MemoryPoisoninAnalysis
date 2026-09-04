@@ -121,3 +121,45 @@ Stop the service without deleting its persistent volume:
 Local credentials belong in `.env` (see `.env.example`). Runtime memory,
 database volumes, and emitted evidence belong below `artifacts/`; neither is
 committed.
+
+## LangMem selective writer
+
+LangMem 0.0.30 is installed in the same isolated Python 3.12 environment as
+LangGraph. It is an explicitly versioned selective writer over a LangGraph
+Store, not a storage replacement and not a native capability of LangGraph
+itself. Local development defaults to a run-specific SQLite database, so this
+path does not require Docker or PostgreSQL:
+
+```powershell
+.\.venvs\langgraph\Scripts\membench.exe langmem status
+.\.venvs\langgraph\Scripts\membench.exe langmem smoke
+.\.venvs\langgraph\Scripts\membench.exe langmem verify
+```
+
+Semantic memory is the default. Episodic and procedural records can be enabled
+for a separately declared condition and are written to distinct namespaces:
+
+```powershell
+$env:LANGMEM_MEMORY_TYPES = "semantic,episodic,procedural"
+.\.venvs\langgraph\Scripts\membench.exe langmem verify
+Remove-Item Env:LANGMEM_MEMORY_TYPES
+```
+
+The procedural schema stores reusable rules as inert records. Runtime prompt
+optimization remains disabled because it is outside the current black-box
+experiment scope. The example manifest is
+`configs/experiments/blackbox/langmem_semantic.example.yaml`.
+
+The writer and embedder are independently selectable. To move the writer to
+OpenAI while retaining local Ollama embeddings and SQLite storage, set:
+
+```dotenv
+LANGMEM_PROVIDER=openai
+LANGMEM_OPENAI_WRITER_MODEL=gpt-4o-mini-2024-07-18
+LANGMEM_EMBEDDING_PROVIDER=ollama
+OPENAI_API_KEY=replace-locally
+```
+
+Set `LANGMEM_EMBEDDING_PROVIDER=openai` plus the OpenAI embedding model and
+dimensions only when remote embedding is intentional. Changing an embedding
+model or its dimensions requires a fresh run ID and store.

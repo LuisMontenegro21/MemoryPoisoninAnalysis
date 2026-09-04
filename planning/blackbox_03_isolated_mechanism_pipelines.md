@@ -151,14 +151,19 @@ policy implementation.
 
 - `direct`: direct `PostgresStore.put()`;
 - `shared_guarded`: shared decision followed by `put()`;
-- `native_selective`: unsupported in the initial track.
+- `native_selective`: `langmem_store_manager_v1` using LangMem 0.0.30, when the
+  writer version and memory families are explicit in the manifest.
 
 LangGraph Store does not decide what should become memory. A project-defined
 writer must be named and versioned; it cannot be labeled “LangGraph native.”
+The implemented LangMem path performs synchronous background-manager invocation
+at `flush_and_wait()`, so accepted writes are visible before retrieval begins.
 
 ### Isolation
 
 - use `InMemoryStore` only for smoke tests;
+- use a run-specific `SqliteStore` for local LangMem development and
+  qualification without Docker;
 - use local PostgreSQL for pilot/final runs;
 - allocate a unique database/schema and namespace per trial;
 - run `store.setup()` as a controlled migration step;
@@ -171,7 +176,11 @@ writer must be named and versioned; it cannot be labeled “LangGraph native.”
 - JSON record schema;
 - embedding model, dimensions, and indexed fields;
 - retrieval filters and `top_k`;
-- exact writer implementation version.
+- exact writer implementation version;
+- enabled LangMem families (`semantic`, `episodic`, `procedural`), each in a
+  separate namespace;
+- deletion behavior and the explicit false value for procedural prompt
+  optimization.
 
 ## 7. Model routing
 
@@ -266,4 +275,3 @@ This phase is complete when every scheduled mechanism-policy-model condition:
 - produces a sealed qualification report;
 - has no unresolved namespace contamination or silent fallback;
 - can run one clean/matched/poisoned smoke family end to end.
-

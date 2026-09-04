@@ -28,6 +28,37 @@ _POSTGRES_IMAGE = (
 )
 
 
+def build_ollama_index_config(
+    base_url: str,
+    model: str,
+    dimensions: int,
+    *,
+    fields: Sequence[str] = ("text",),
+) -> dict[str, Any]:
+    """Build a LangGraph vector index backed by the shared Ollama endpoint."""
+    if dimensions <= 0:
+        raise ValueError("embedding dimensions must be positive")
+    if not fields:
+        raise ValueError("at least one index field is required")
+
+    def embed_documents(texts: Sequence[str]) -> list[list[float]]:
+        service = OllamaService(base_url, timeout=180.0)
+        vectors = [service.embed(model, text) for text in texts]
+        for vector in vectors:
+            if len(vector) != dimensions:
+                raise LangGraphStoreError(
+                    f"{model} returned {len(vector)} dimensions; "
+                    f"expected {dimensions}"
+                )
+        return vectors
+
+    return {
+        "dims": dimensions,
+        "embed": embed_documents,
+        "fields": list(fields),
+    }
+
+
 @dataclass(frozen=True)
 class LangGraphStoreSettings:
     """Resolved PostgreSQL and embedding settings for LangGraph memory."""
@@ -109,23 +140,20 @@ class LangGraphStoreSettings:
 
     def embed_documents(self, texts: Sequence[str]) -> list[list[float]]:
         """Embed a batch through the already-qualified native Ollama endpoint."""
-        service = OllamaService(self.embedding_base_url, timeout=180.0)
-        vectors = [service.embed(self.embedding_model, text) for text in texts]
-        for vector in vectors:
-            if len(vector) != self.embedding_dimensions:
-                raise LangGraphStoreError(
-                    f"{self.embedding_model} returned {len(vector)} dimensions; "
-                    f"expected {self.embedding_dimensions}"
-                )
-        return vectors
+        embed = build_ollama_index_config(
+            self.embedding_base_url,
+            self.embedding_model,
+            self.embedding_dimensions,
+        )["embed"]
+        return embed(texts)
 
     def index_config(self) -> dict[str, Any]:
         """Build the semantic-index configuration consumed by PostgresStore."""
-        return {
-            "dims": self.embedding_dimensions,
-            "embed": self.embed_documents,
-            "fields": ["text"],
-        }
+        return build_ollama_index_config(
+            self.embedding_base_url,
+            self.embedding_model,
+            self.embedding_dimensions,
+        )
 
 
 @dataclass(frozen=True)
